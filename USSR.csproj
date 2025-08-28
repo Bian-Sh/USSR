@@ -11,10 +11,6 @@
   <ItemGroup>
     <PackageReference Include="AssetsTools.NET" Version="3.0.0" />
     <PackageReference Include="KaitaiStruct.Runtime.CSharp" Version="0.10.0" />
-    <PackageReference Include="Kiraio.UnityWebTools.NET" Version="1.0.0" />
-    <PackageReference Include="NativeFileDialogs.Net" Version="1.2.1" />
-    <PackageReference Include="Spectre.Console" Version="0.49.1" />
-    <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
   </ItemGroup>
 
 </Project>
