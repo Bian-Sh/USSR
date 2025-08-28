@@ -1,293 +1,176 @@
 ﻿using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 
-namespace USSR.Core
+namespace Realis
 {
     public class UDSR
     {
         const string ASSET_CLASS_DB = "classdata.tpk";
         static void Main(string[] args)
         {
-            string? ussrExec = Path.GetDirectoryName(AppContext.BaseDirectory);
-
-            // 检查命令行参数
+            int exitCode = 1;
+            string reason = string.Empty;
             if (args.Length == 0)
             {
-                Console.WriteLine("用法: UDSR.exe <.exe 文件路径>");
-                Environment.Exit(1);
+                reason = "用法: UDSR.exe <.exe 文件路径>";
+                Console.WriteLine(reason);
+                Environment.Exit(exitCode);
                 return;
             }
 
-            // 命令行模式
             string filePath = args[0].Trim();
             string exeDir = Path.GetDirectoryName(filePath) ?? string.Empty;
             string dataDir = Path.Combine(exeDir, $"{Path.GetFileNameWithoutExtension(filePath)}_Data");
             string selectedFile = Path.Combine(dataDir, "globalgamemanagers");
 
-            AssetsManager assetsManager = new();
-            string? tpkFile = Path.Combine(ussrExec ?? string.Empty, ASSET_CLASS_DB);
-            if (!LoadClassPackage(assetsManager, tpkFile))
-            {
-                Console.WriteLine("( ERR! ) Failed to load class types package! Exiting...");
-                return;
-            }
+            var (Success, Reason) = RemoveUnitySplash(selectedFile);
+            Console.WriteLine(Reason);
+            exitCode = Success ? 0 : 1;
+            Environment.Exit(exitCode);
+        }
 
+        /// <summary>
+        /// 移除 Unity Splash Screen (仅支持 Windows globalgamemanagers 文件)
+        /// </summary>
+        /// <param name="globalgamemanagersPath">globalgamemanagers 文件路径</param>
+        /// <returns>操作结果和原因</returns>
+        public static (bool Success, string Reason) RemoveUnitySplash(string globalgamemanagersPath)
+        {
             List<string> temporaryFiles = new();
-            string inspectedFile = selectedFile;
-            AssetsFileInstance? assetFileInstance = null;
-            FileStream? bundleStream = null;
-
-            string tempFile = CloneFile(inspectedFile, $"{inspectedFile}.temp");
-            temporaryFiles.Add(tempFile);
-            temporaryFiles.Add($"{tempFile}.unpacked");
-            assetFileInstance = LoadAssetFileInstance(tempFile, assetsManager);
-
-            if (assetFileInstance != null)
+            try
             {
-                try
+                if (string.IsNullOrWhiteSpace(globalgamemanagersPath))
+                    return (false, "文件路径不能为空");
+
+                if (!File.Exists(globalgamemanagersPath))
+                    return (false, $"文件不存在: {globalgamemanagersPath}");
+
+                string fileName = Path.GetFileName(globalgamemanagersPath);
+                if (!fileName.Contains("globalgamemanagers"))
+                    return (false, "不支持的文件类型，仅支持 globalgamemanagers 文件");
+
+                string? ussrExec = Path.GetDirectoryName(AppContext.BaseDirectory);
+                var tpkFile = Path.Combine(ussrExec ?? string.Empty, ASSET_CLASS_DB);
+                if (!File.Exists(tpkFile))
                 {
-                    Console.WriteLine("( INFO ) Loading asset class types database...");
-                    assetsManager.LoadClassDatabaseFromPackage(assetFileInstance.file.Metadata.UnityVersion);
-                    Console.WriteLine($"( INFO ) Unity Version: {assetFileInstance.file.Metadata.UnityVersion}");
-                    assetFileInstance.file = RemoveSplashScreen(assetsManager, assetFileInstance);
-                    if (assetFileInstance.file != null)
+                    return (false, $"TPK 文件不存在: {tpkFile}");
+                }
+
+                string backupFile = $"{globalgamemanagersPath}.bak";
+                if (!File.Exists(backupFile))
+                {
+                    try
                     {
-                        BackupOnlyOnce(selectedFile);
-                        WriteChanges(inspectedFile, assetFileInstance);
+                        File.Copy(globalgamemanagersPath, backupFile, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        return (false, $"创建备份文件失败: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"( ERR! ) Error when loading asset class types database! {ex.Message}");
-                }
-            }
 
-            Cleanup(
-                temporaryFiles,
-                bundleStream,
-                assetsManager
-            );
-        }
-
-        private static void Cleanup(List<string> temporaryFiles, FileStream? bundleStream, AssetsManager assetsManager)
-        {
-            bundleStream?.Close();
-            assetsManager?.UnloadAll(true);
-            CleanUp(temporaryFiles);
-        }
-
-        static bool LoadClassPackage(AssetsManager assetsManager, string tpkFile)
-        {
-            if (File.Exists(tpkFile))
-            {
+                string tempFile = $"{globalgamemanagersPath}.temp";
+                temporaryFiles.Add(tempFile);
                 try
                 {
-                    Console.WriteLine($"( INFO ) Loading class types package: {tpkFile}...");
+                    File.Copy(globalgamemanagersPath, tempFile, true);
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"创建临时文件失败: {ex.Message}");
+                }
+
+                AssetsManager assetsManager = new();
+                AssetsFileInstance? assetFileInstance = null;
+                try
+                {
                     assetsManager.LoadClassPackage(path: tpkFile);
-                    return true;
+                    assetFileInstance = assetsManager.LoadAssetsFile(tempFile, true);
+                    if (assetFileInstance == null)
+                        return (false, "加载资源文件失败");
+                    assetsManager.LoadClassDatabaseFromPackage(assetFileInstance.file.Metadata.UnityVersion);
+                    var result = ProcessSplashRemoval(assetsManager, assetFileInstance);
+                    if (!result.Success)
+                        return result;
+                    using (AssetsFileWriter writer = new(globalgamemanagersPath))
+                    {
+                        assetFileInstance.file.Write(writer);
+                    }
+                    return (true, result.Reason);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"( ERR! ) Error when loading class types package! {ex.Message}");
+                    return (false, $"处理资源文件时出错: {ex.Message}");
+                }
+                finally
+                {
+                    assetsManager?.UnloadAll(true);
                 }
             }
-            else
-                Console.WriteLine($"( ERR! ) TPK file not found: {tpkFile}...");
-
-            return false;
+            catch (Exception ex)
+            {
+                return (false, $"未预期的错误: {ex.Message}");
+            }
+            finally
+            {
+                foreach (string tempFile in temporaryFiles)
+                {
+                    try
+                    {
+                        if (File.Exists(tempFile))
+                            File.Delete(tempFile);
+                    }
+                    catch { }
+                }
+            }
         }
 
-        static AssetsFileInstance? LoadAssetFileInstance(
-            string assetFile,
-            AssetsManager assetsManager
-        )
-        {
-            AssetsFileInstance? assetFileInstance = null;
-
-            if (File.Exists(assetFile))
-            {
-                try
-                {
-                    Console.WriteLine($"( INFO ) Loading asset file: {assetFile}...");
-                    assetFileInstance = assetsManager.LoadAssetsFile(assetFile, true);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"( ERR! ) Error when loading asset file! {ex.Message}");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"( ERR! ) Asset file not found: {assetFile}");
-            }
-
-            return assetFileInstance;
-        }
-
-        static AssetsFile? RemoveSplashScreen(
-            AssetsManager assetsManager,
-            AssetsFileInstance? assetFileInstance
-        )
+        /// <summary>
+        /// 核心的 Splash Screen 移除逻辑
+        /// </summary>
+        private static (bool Success, string Reason) ProcessSplashRemoval(AssetsManager assetsManager, AssetsFileInstance assetFileInstance)
         {
             try
             {
-                Console.WriteLine("( INFO ) Start removing Unity splash screen...");
-
-                AssetsFile? assetFile = assetFileInstance?.file;
-
-                List<AssetFileInfo>? buildSettingsInfo = assetFile?.GetAssetsOfType(
-                    AssetClassID.BuildSettings
-                );
-                AssetTypeValueField buildSettingsBase = assetsManager.GetBaseField(
-                    assetFileInstance,
-                    buildSettingsInfo?[0]
-                );
-
-                List<AssetFileInfo>? playerSettingsInfo = assetFile?.GetAssetsOfType(
-                    AssetClassID.PlayerSettings
-                );
-                AssetTypeValueField? playerSettingsBase = null;
+                AssetsFile assetFile = assetFileInstance.file;
+                List<AssetFileInfo> buildSettingsInfos = assetFile.GetAssetsOfType(AssetClassID.BuildSettings);
+                if (buildSettingsInfos == null || buildSettingsInfos.Count == 0)
+                    return (false, "找不到 BuildSettings 数据");
+                AssetTypeValueField buildSettingsBase = assetsManager.GetBaseField(assetFileInstance, buildSettingsInfos[0]);
+                List<AssetFileInfo> playerSettingsInfos = assetFile.GetAssetsOfType(AssetClassID.PlayerSettings);
+                if (playerSettingsInfos == null || playerSettingsInfos.Count == 0)
+                    return (false, "找不到 PlayerSettings 数据");
+                AssetTypeValueField playerSettingsBase;
                 try
                 {
-                    playerSettingsBase = assetsManager.GetBaseField(
-                        assetFileInstance,
-                        playerSettingsInfo?[0]
-                    );
+                    playerSettingsBase = assetsManager.GetBaseField(assetFileInstance, playerSettingsInfos[0]);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"( ERR! ) Can't get Player Settings fields! {ex.Message} It's possible that the current Unity version isn't supported yet.");
-                    Console.WriteLine("( INFO ) Try updating the classdata.tpk manually from there: https://nightly.link/AssetRipper/Tpk/workflows/type_tree_tpk/master/uncompressed_file.zip and try again. If the issue still persist, try use another Unity version.");
-                    return assetFile;
+                    return (false, $"无法获取 PlayerSettings 字段: {ex.Message}。可能不支持当前的 Unity 版本");
                 }
-
                 bool hasProVersion = buildSettingsBase["hasPROVersion"].AsBool;
                 bool showUnityLogo = playerSettingsBase["m_ShowUnitySplashLogo"].AsBool;
-
                 if (hasProVersion && !showUnityLogo)
+                    return (true, "Unity 启动画面已经被移除过了");
+                AssetTypeValueField splashScreenLogos = playerSettingsBase["m_SplashScreenLogos.Array"];
+                int totalSplashScreens = splashScreenLogos.Count();
+                if (totalSplashScreens > 0)
                 {
-                    Console.WriteLine("( WARN ) Unity splash screen already removed!");
-                    return assetFile;
+                    splashScreenLogos.Children.RemoveAt(0);
                 }
-
-                AssetTypeValueField splashScreenLogos = playerSettingsBase[
-                    "m_SplashScreenLogos.Array"
-                ];
-                int totalSplashScreen = splashScreenLogos.Count();
-
-                Console.WriteLine($"( INFO ) There's {totalSplashScreen} splash screen detected:");
-
-                if (totalSplashScreen <= 0)
-                {
-                    Console.WriteLine("( WARN ) Nothing to do.");
-                    return assetFile;
-                }
-
-                for (int i = 0; i < totalSplashScreen; i++)
-                {
-                    AssetTypeValueField? logoPptr = splashScreenLogos.Children[i].Get(0);
-                    AssetExternal logoExtInfo = assetsManager.GetExtAsset(assetFileInstance, logoPptr);
-                    Console.WriteLine($"{i + 1} => {(logoExtInfo.baseField != null ? logoExtInfo.baseField["m_Name"].AsString : "UnitySplash-cube")}");
-                }
-
-                Console.WriteLine("Remove first splash screen !");
-
-                Console.WriteLine($"( INFO ) Set hasProVersion = {!hasProVersion} | m_ShowUnitySplashLogo = {!showUnityLogo}");
-
-                buildSettingsBase["hasPROVersion"].AsBool = !hasProVersion;
-                playerSettingsBase["m_ShowUnitySplashLogo"].AsBool = !showUnityLogo;
-
-                splashScreenLogos?.Children.RemoveAt(0);
-                playerSettingsInfo?[0].SetNewData(playerSettingsBase);
-                buildSettingsInfo?[0].SetNewData(buildSettingsBase);
-
-                return assetFile;
+                buildSettingsBase["hasPROVersion"].AsBool = true;
+                playerSettingsBase["m_ShowUnitySplashLogo"].AsBool = false;
+                playerSettingsInfos[0].SetNewData(playerSettingsBase);
+                buildSettingsInfos[0].SetNewData(buildSettingsBase);
+                string message = totalSplashScreens > 0
+                    ? $"成功移除首个（共 {totalSplashScreens} 个）Splash Screen 并设置为 Pro 版本"
+                    : "已设置为 Pro 版本并隐藏 Unity Logo";
+                return (true, message);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"( ERR! ) Error when removing the splash screen! {ex.Message}");
-                return null;
-            }
-        }
-
-        static void WriteChanges(
-            string modifiedFile,
-            AssetsFileInstance? assetFileInstance
-        )
-        {
-            try
-            {
-                Console.WriteLine($"( INFO ) Writing changes to {modifiedFile}...");
-                using AssetsFileWriter writer = new(modifiedFile);
-                assetFileInstance?.file.Write(writer);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"( ERR! ) Error when writing changes! {ex.Message}");
-            }
-        }
-        /// <summary>
-        /// Clone a file.
-        /// </summary>
-        /// <param name="sourceFile"></param>
-        /// <param name="outputFile"></param>
-        /// <returns>Cloned file path.</returns>
-        internal static string CloneFile(string sourceFile, string outputFile)
-        {
-            try
-            {
-                if (!File.Exists(sourceFile))
-                {
-                    Console.WriteLine($"( ERROR ) Source file to duplicate doesn't exist: {sourceFile}");
-                    return string.Empty;
-                }
-
-                File.Copy(sourceFile, outputFile, true);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Exception: {ex.Message}");
-                return string.Empty;
-            }
-
-            return outputFile;
-        }
-
-        /// <summary>
-        /// Backup a file as ".bak". If it's already exist, skip.
-        /// </summary>
-        /// <param name="sourceFile"></param>
-        /// <returns></returns>
-        internal static string BackupOnlyOnce(string sourceFile)
-        {
-            string backupFile = $"{sourceFile}.bak";
-
-            if (!File.Exists(backupFile))
-            {
-                Console.WriteLine($"( INFO ) Backup {Path.GetFileName(sourceFile)} as {backupFile}...");
-                CloneFile(sourceFile, backupFile);
-            }
-
-            return backupFile;
-        }
-
-        /// <summary>
-        /// Delete <paramref name="paths"/>.
-        /// </summary>
-        /// <param name="paths"></param>
-        internal static void CleanUp(List<string> paths)
-        {
-            if (paths != null && paths?.Count > 0)
-            {
-                Console.WriteLine("( INFO ) Cleaning up temporary files...");
-                foreach (string path in paths)
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-
-                    if (Directory.Exists(path))
-                        Directory.Delete(path, true);
-                }
+                return (false, $"移除 Splash Screen 时发生错误: {ex.Message}");
             }
         }
     }
