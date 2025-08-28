@@ -1,45 +1,7 @@
-using Spectre.Console;
-
 namespace USSR.Utilities
 {
     internal class Utility
     {
-        const string LAST_OPEN_FILE = "last_open.txt";
-        const string VERSION_FILE = "version.txt";
-
-        /// <summary>
-        /// Check the file signature if it's a valid file.
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <param name="fileSignature"></param>
-        /// <returns>The file are valid or not.</returns>
-        internal static bool ValidateFile(string filePath, byte[] fileSignature)
-        {
-            try
-            {
-                byte[] sourceFileSignature = new byte[fileSignature.Length];
-
-                using FileStream file = File.OpenRead(filePath);
-                file.Read(sourceFileSignature, 0, fileSignature.Length);
-
-                for (int i = 0; i < fileSignature.Length; i++)
-                {
-                    if (sourceFileSignature[i] != fileSignature[i])
-                    {
-                        // AnsiConsole.MarkupLine("[red]Unknown/Unsupported[/] file type!");
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.WriteException(ex);
-                return false;
-            }
-        }
-
         /// <summary>
         /// Clone a file.
         /// </summary>
@@ -52,9 +14,7 @@ namespace USSR.Utilities
             {
                 if (!File.Exists(sourceFile))
                 {
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"[red]( ERROR )[/] Source file to duplicate doesn\'t exist: [red]{sourceFile}[/]"
-                    );
+                    Console.WriteLine($"( ERROR ) Source file to duplicate doesn't exist: {sourceFile}");
                     return string.Empty;
                 }
 
@@ -62,7 +22,7 @@ namespace USSR.Utilities
             }
             catch (Exception ex)
             {
-                AnsiConsole.WriteException(ex);
+                Console.WriteLine($"Exception: {ex.Message}");
                 return string.Empty;
             }
 
@@ -80,9 +40,7 @@ namespace USSR.Utilities
 
             if (!File.Exists(backupFile))
             {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"( INFO ) Backup [green]{Path.GetFileName(sourceFile)}[/] as [green]{backupFile}[/]..."
-                );
+                Console.WriteLine($"( INFO ) Backup {Path.GetFileName(sourceFile)} as {backupFile}...");
                 CloneFile(sourceFile, backupFile);
             }
 
@@ -97,7 +55,7 @@ namespace USSR.Utilities
         {
             if (paths != null && paths?.Count > 0)
             {
-                AnsiConsole.MarkupLine("( INFO ) Cleaning up temporary files...");
+                Console.WriteLine("( INFO ) Cleaning up temporary files...");
                 foreach (string path in paths)
                 {
                     if (File.Exists(path))
@@ -107,77 +65,6 @@ namespace USSR.Utilities
                         Directory.Delete(path, true);
                 }
             }
-        }
-
-        /// <summary>
-        /// Find the required asset to remove the splash screen or watermark.
-        /// </summary>
-        /// <param name="directoryPath"></param>
-        /// <returns>"data.unity3d" or "globalgamemanagers" file.</returns>
-        internal static string FindRequiredAsset(string directoryPath)
-        {
-            string[] assets = { "data.unity3d", "globalgamemanagers" };
-            string path = string.Empty;
-
-            foreach (string asset in assets)
-            {
-                if (File.Exists(path = Path.Combine(directoryPath, asset)))
-                    break;
-            }
-
-            return path;
-        }
-
-        internal static void SaveLastOpenedFile(string filePath)
-        {
-            try
-            {
-                // Write the last opened directory to a text file
-                using StreamWriter writer = new(LAST_OPEN_FILE);
-                writer.WriteLine($"last_opened={filePath}");
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.WriteException(ex);
-            }
-        }
-
-        internal static string GetLastOpenedFile()
-        {
-            string lastOpenedDirectory = string.Empty;
-
-            if (!File.Exists(LAST_OPEN_FILE))
-                return lastOpenedDirectory;
-
-            try
-            {
-                // Read the last opened directory from the text file
-                using StreamReader reader = new(LAST_OPEN_FILE);
-                string? line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    if (line.StartsWith("last_opened="))
-                    {
-                        lastOpenedDirectory = line["last_opened=".Length..];
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.WriteException(ex);
-            }
-
-            return lastOpenedDirectory;
-        }
-
-        internal static string? GetVersion()
-        {
-            if (!File.Exists(VERSION_FILE))
-                return "UNKNOWN";
-
-            using StreamReader reader = new(VERSION_FILE);
-            return reader.ReadLine();
         }
     }
 }
