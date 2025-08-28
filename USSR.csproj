@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <PackageReference Include="AssetsTools.NET" Version="3.0.0" />
-    <PackageReference Include="KaitaiStruct.Runtime.CSharp" Version="0.10.0" />
   </ItemGroup>
 
 </Project>

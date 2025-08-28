@@ -3,7 +3,7 @@ using AssetsTools.NET.Extra;
 
 namespace USSR.Core
 {
-    public class USSR
+    public class UDSR
     {
         const string ASSET_CLASS_DB = "classdata.tpk";
         static void Main(string[] args)
