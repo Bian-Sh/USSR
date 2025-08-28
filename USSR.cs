@@ -56,7 +56,7 @@ namespace USSR.Core
                     if (assetFileInstance.file != null)
                     {
                         Utility.BackupOnlyOnce(selectedFile);
-                        WriteChanges(inspectedFile, AssetTypes.Asset, assetFileInstance, bundleFileInstance);
+                        WriteChanges(inspectedFile, assetFileInstance);
                     }
                 }
                 catch (Exception ex)
@@ -215,54 +215,18 @@ namespace USSR.Core
 
         static void WriteChanges(
             string modifiedFile,
-            AssetTypes assetType,
-            AssetsFileInstance? assetFileInstance,
-            BundleFileInstance? bundleFileInstance
+            AssetsFileInstance? assetFileInstance
         )
         {
-            string uncompressedBundleFile = $"{modifiedFile}.uncompressed";
-
             try
             {
                 Console.WriteLine($"( INFO ) Writing changes to {modifiedFile}...");
-
-                switch (assetType)
-                {
-                    case AssetTypes.Asset:
-                        {
-                            using AssetsFileWriter writer = new(modifiedFile);
-                            assetFileInstance?.file.Write(writer);
-                            break;
-                        }
-                    case AssetTypes.Bundle:
-                        {
-                            bundleFileInstance
-                                ?.file.BlockAndDirInfo.DirectoryInfos[0]
-                                .SetNewData(assetFileInstance?.file);
-                            using (AssetsFileWriter writer = new(uncompressedBundleFile))
-                                bundleFileInstance?.file.Write(writer);
-
-                            Console.WriteLine($"( INFO ) Compressing {modifiedFile}...");
-                            using FileStream uncompressedBundleStream = File.OpenRead(
-                                uncompressedBundleFile
-                            );
-                            AssetBundleFile uncompressedBundle = new();
-                            uncompressedBundle.Read(new AssetsFileReader(uncompressedBundleStream));
-
-                            using AssetsFileWriter uncompressedWriter = new(modifiedFile);
-                            uncompressedBundle.Pack(uncompressedWriter, AssetBundleCompressionType.LZ4);
-                            break;
-                        }
-                }
+                using AssetsFileWriter writer = new(modifiedFile);
+                assetFileInstance?.file.Write(writer);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"( ERR! ) Error when writing changes! {ex.Message}");
-            }
-            finally
-            {
-                if (File.Exists(uncompressedBundleFile))
-                    File.Delete(uncompressedBundleFile);
             }
         }
     }
