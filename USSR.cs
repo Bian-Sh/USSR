@@ -1,7 +1,5 @@
 ﻿using AssetsTools.NET;
 using AssetsTools.NET.Extra;
-using Kiraio.UnityWebTools;
-using NativeFileDialogs.Net;
 using Spectre.Console;
 using USSR.Enums;
 using USSR.Utilities;
@@ -19,7 +17,6 @@ namespace USSR.Core
             AnsiConsole.Background = Color.Grey11;
 
             string? ussrExec = Path.GetDirectoryName(AppContext.BaseDirectory);
-            string[] menuList = { "Remove Unity Splash Screen", "Remove Watermark", "Exit" };
 
             // 检查命令行参数
             if (args.Length == 0)
@@ -34,7 +31,6 @@ namespace USSR.Core
             string exeDir = Path.GetDirectoryName(filePath) ?? string.Empty;
             string dataDir = Path.Combine(exeDir, $"{Path.GetFileNameWithoutExtension(filePath)}_Data");
             string selectedFile = Path.Combine(dataDir, "globalgamemanagers");
-
 
             AssetsManager assetsManager = new();
             string? tpkFile = Path.Combine(ussrExec ?? string.Empty, ASSET_CLASS_DB);
@@ -91,202 +87,6 @@ namespace USSR.Core
             bundleStream?.Close();
             assetsManager?.UnloadAll(true);
             Utility.CleanUp(temporaryFiles);
-        }
-
-        /// <summary>
-        /// Get the type of the specified asset file.
-        /// </summary>
-        /// <param name="selectedFile"></param>
-        /// <param name="webDataFile"></param>
-        /// <param name="isWebGL"></param>
-        /// <returns></returns>
-        static AssetTypes GetAssetType(
-            string selectedFile,
-            ref string webDataFile,
-            ref bool isWebGL,
-            ref WebCompressionTypes webCompressionTypes
-        )
-        {
-            string selectedFileName = Path.GetFileName(selectedFile);
-            if (selectedFileName.Contains("globalgamemanagers"))
-                return AssetTypes.Asset;
-            if (selectedFileName.EndsWith(".unity3d"))
-                return AssetTypes.Bundle;
-            if (selectedFileName.EndsWith(".data"))
-            {
-                isWebGL = true;
-                webDataFile = selectedFile;
-                return AssetTypes.Asset; // Default to Asset type
-            }
-            if (selectedFileName.EndsWith("data.unityweb"))
-            {
-                isWebGL = true;
-                webCompressionTypes = GetCompression();
-                if (!DecompressWebData(webCompressionTypes, selectedFile, webDataFile))
-                    return AssetTypes.Unknown;
-                return AssetTypes.Asset;
-            }
-            if (selectedFileName.EndsWith("data.br"))
-            {
-                isWebGL = true;
-                DecompressWebData(WebCompressionTypes.Brotli, selectedFile, webDataFile);
-                return AssetTypes.Asset;
-            }
-            if (selectedFileName.EndsWith("data.gz"))
-            {
-                isWebGL = true;
-                DecompressWebData(WebCompressionTypes.GZip, selectedFile, webDataFile);
-                return AssetTypes.Asset;
-            }
-            return AssetTypes.Unknown;
-        }
-
-        /// <summary>
-        /// Clean up memory and temporary files.
-        /// </summary>
-        /// <param name="temporaryFiles"></param>
-        /// <param name="bundleStream"></param>
-        /// <param name="assetsManager"></param>
-        /// <param name="unpackedWebDataDirectory"></param>
-        /// <param name="webDataFile"></param>
-        /// <param name="isWebGL"></param>
-        static void Cleanup(
-            List<string> temporaryFiles,
-            FileStream? bundleStream,
-            AssetsManager assetsManager,
-            string? unpackedWebDataDirectory,
-            string webDataFile,
-            bool isWebGL
-        )
-        {
-            bundleStream?.Close();
-            assetsManager?.UnloadAll(true);
-            Utility.CleanUp(temporaryFiles);
-
-            // if (isWebGL)
-            // {
-            //     try
-            //     {
-            //         if (Directory.Exists(unpackedWebDataDirectory))
-            //             Directory.Delete(unpackedWebDataDirectory, true);
-            //         if (File.Exists(webDataFile))
-            //             File.Delete(webDataFile);
-            //     }
-            //     catch (Exception ex)
-            //     {
-            //         AnsiConsole.MarkupLine("[red]( ERR! )[/] Error cleaning up temporary files!");
-            //         AnsiConsole.WriteException(ex);
-            //     }
-            // }
-        }
-
-        /// <summary>
-        /// Help message.
-        /// </summary>
-        static void PrintHelp()
-        {
-            AnsiConsole.MarkupLineInterpolated(
-                $"[bold red]Unity Splash Screen Remover v{appVersion}[/]"
-            );
-            Console.WriteLine();
-            AnsiConsole.MarkupLine(
-                "USSR is a tool to easily remove Unity splash screen. USSR didn't directly \"hack\" the Unity Editor, but the generated build."
-            );
-            Console.WriteLine();
-            AnsiConsole.MarkupLine(
-                "Before using USSR, make sure you have set the splash screen [bold green]Draw Mode[/] in [bold green]Player Settings[/] to [bold green]All Sequential[/] and backup the target file below! For more information, visit USSR GitHub repo: [link]https://github.com/kiraio-moe/USSR[/]"
-            );
-            Console.WriteLine();
-            AnsiConsole.MarkupLine("[bold green]HOW TO USE[/]");
-            AnsiConsole.MarkupLine(
-                "Select the action below, find and select one of these files in your game data:"
-            );
-            AnsiConsole.MarkupLine(
-                "[green]globalgamemanagers[/] | [green]data.unity3d[/] | [green]*.data[/] | [green]*.data.br[/] | [green]*.data.gz[/] | [green]*.data.unityweb[/]"
-            );
-            Console.WriteLine();
-        }
-
-        /// <summary>
-        /// Get selected prompt menu.
-        /// </summary>
-        /// <returns></returns>
-        static int GetPromptChoice(string[] menuList)
-        {
-            string actionPrompt = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("What would you like to do? (Press ENTER to go, UP/DOWN to select)")
-                    .AddChoices(menuList)
-            );
-            return Array.FindIndex(menuList, item => item == actionPrompt);
-        }
-
-        /// <summary>
-        /// Get asset compression type.
-        /// </summary>
-        /// <returns></returns>
-        static WebCompressionTypes GetCompression()
-        {
-            string[] compressionList = { "Brotli", "GZip" };
-            string compressionListPrompt = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("What compression did you use?")
-                    .AddChoices(compressionList)
-            );
-            int choiceIndex = Array.FindIndex(
-                compressionList,
-                item => item == compressionListPrompt
-            );
-
-            return choiceIndex switch
-            {
-                0 => WebCompressionTypes.Brotli,
-                1 => WebCompressionTypes.GZip,
-                _ => WebCompressionTypes.None,
-            };
-        }
-
-        /// <summary>
-        /// Open file picker dialog.
-        /// </summary>
-        /// <returns>Selected file path.</returns>
-        static string? OpenFilePicker()
-        {
-            try
-            {
-                AnsiConsole.MarkupLine("Opening File Picker...");
-
-                NfdStatus filePicker = Nfd.OpenDialog(
-                    out string? path,
-                    new Dictionary<string, string>()
-                    {
-                        {
-                            "Unity Files",
-                            "globalgamemanagers,unity3d,data,data.br,data.gz,data.unityweb"
-                        },
-                    },
-                    Path.GetDirectoryName(Utility.GetLastOpenedFile())
-                );
-
-                switch (filePicker)
-                {
-                    case NfdStatus.Cancelled:
-                        AnsiConsole.MarkupLine("Cancelled.");
-                        Console.Clear();
-                        return string.Empty;
-                    case NfdStatus.Ok:
-                        return path ?? string.Empty;
-                    default:
-                        return string.Empty;
-                }
-            }
-            catch (NfdException ex)
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]( ERR! )[/] Unable to open File Picker! Try using a different Terminal?\n{ex.Message}"
-                );
-                return string.Empty;
-            }
         }
 
         /// <summary>
@@ -359,98 +159,6 @@ namespace USSR.Core
             }
 
             return assetFileInstance;
-        }
-
-        /// <summary>
-        /// Wrapper for LoadAssetsFileFromBundle.
-        /// </summary>
-        /// <param name="assetFile"></param>
-        /// <param name="assetsManager"></param>
-        /// <param name="bundleFileInstance"></param>
-        /// <returns></returns>
-        static AssetsFileInstance? LoadAssetFileInstance(
-            string assetFile,
-            AssetsManager assetsManager,
-            BundleFileInstance? bundleFileInstance
-        )
-        {
-            AssetsFileInstance? assetFileInstance = null;
-
-            if (File.Exists(assetFile))
-            {
-                try
-                {
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"( INFO ) Loading asset file: [green]{assetFile}[/]..."
-                    );
-                    assetFileInstance = assetsManager.LoadAssetsFileFromBundle(
-                        bundleFileInstance,
-                        0,
-                        true
-                    );
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"[red]( ERR! )[/] Error when loading asset file! {ex.Message}"
-                    );
-                }
-            }
-            else
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]( ERR! )[/] Asset file not found: [red]{assetFile}[/]"
-                );
-            }
-
-            return assetFileInstance;
-        }
-
-        /// <summary>
-        /// Wrapper for LoadBundleFile.
-        /// </summary>
-        /// <param name="bundleFile"></param>
-        /// <param name="assetsManager"></param>
-        /// <param name="unpackedBundleFileStream"></param>
-        /// <returns></returns>
-        static BundleFileInstance? LoadBundleFileInstance(
-            string bundleFile,
-            AssetsManager assetsManager,
-            FileStream? unpackedBundleFileStream
-        )
-        {
-            BundleFileInstance? bundleFileInstance = null;
-
-            if (File.Exists(bundleFile))
-            {
-                try
-                {
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"( INFO ) Loading bundle file: [green]{bundleFile}[/]..."
-                    );
-                    bundleFileInstance = assetsManager.LoadBundleFile(bundleFile, false);
-                    //! Don't auto dispose the stream
-                    unpackedBundleFileStream = File.Open($"{bundleFile}.unpacked", FileMode.Create);
-                    bundleFileInstance.file = BundleHelper.UnpackBundleToStream(
-                        bundleFileInstance.file,
-                        unpackedBundleFileStream
-                    );
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"[red]( ERR! )[/] Error when loading bundle file! {ex.Message}"
-                    );
-                }
-            }
-            else
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]( ERR! )[/] Bundle file not found: [red]{bundleFile}[/]"
-                );
-            }
-
-            return bundleFileInstance;
         }
 
         /// <summary>
@@ -563,63 +271,6 @@ namespace USSR.Core
         }
 
         /// <summary>
-        /// Remove watermark text on the bottom right corner.
-        /// </summary>
-        /// <param name="assetsManager"></param>
-        /// <param name="assetFileInstance"></param>
-        /// <returns></returns>
-        static AssetsFile? RemoveWatermark(
-            AssetsManager assetsManager,
-            AssetsFileInstance? assetFileInstance
-        )
-        {
-            AssetsFile? assetFile = assetFileInstance?.file;
-            try
-            {
-                AnsiConsole.MarkupLine("( INFO ) Removing watermark...");
-                List<AssetFileInfo>? buildSettingsInfo = assetFile?.GetAssetsOfType(
-                    AssetClassID.BuildSettings
-                );
-                AssetTypeValueField buildSettingsBase = assetsManager.GetBaseField(
-                    assetFileInstance,
-                    buildSettingsInfo?[0]
-                );
-
-                bool noWatermark = buildSettingsBase["isNoWatermarkBuild"].AsBool;
-                bool isTrial = buildSettingsBase["isTrial"].AsBool;
-
-                if (noWatermark && !isTrial)
-                {
-                    AnsiConsole.MarkupLine("[yellow]( WARN ) Watermark have been removed![/]");
-                    return assetFile;
-                }
-
-                AnsiConsole.MarkupLineInterpolated(
-                    $"( INFO ) Set [green]isNoWatermarkBuild[/] = [green]True[/] | [green]isTrial[/] = [green]False[/]"
-                );
-
-                buildSettingsBase["isNoWatermarkBuild"].AsBool = true;
-                buildSettingsBase["isTrial"].AsBool = false;
-                buildSettingsInfo?[0].SetNewData(buildSettingsBase);
-
-                AnsiConsole.MarkupLine("[green]( INFO ) Watermark successfully removed.[/]");
-                return assetFile;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]( ERR! )[/] Error when removing the watermark! {ex.Message}"
-                );
-                return assetFile;
-            }
-        }
-
-        // static AssetsFile? RemoveUnitySplashCube(AssetsManager assetsManager, AssetsFileInstance? assetsFileInstance)
-        // {
-
-        // }
-
-        /// <summary>
         /// Write assets changes to disk.
         /// </summary>
         /// <param name="modifiedFile"></param>
@@ -683,52 +334,6 @@ namespace USSR.Core
             {
                 if (File.Exists(uncompressedBundleFile))
                     File.Delete(uncompressedBundleFile);
-            }
-        }
-
-        /// <summary>
-        /// Decompress archived web data.
-        /// </summary>
-        /// <param name="compressionType"></param>
-        /// <param name="inputPath"></param>
-        /// <param name="outputPath"></param>
-        /// <returns></returns>
-        static bool DecompressWebData(
-            WebCompressionTypes compressionType,
-            string inputPath,
-            string outputPath
-        )
-        {
-            AnsiConsole.MarkupLineInterpolated(
-                $"( INFO ) Decompressing data as {compressionType.ToString()} compression: [green]{inputPath}[/]..."
-            );
-
-            try
-            {
-                switch (compressionType)
-                {
-                    case WebCompressionTypes.Brotli:
-                        BrotliUtils.DecompressFile(inputPath, outputPath);
-                        return true;
-                    case WebCompressionTypes.GZip:
-                        GZipUtils.DecompressFile(inputPath, outputPath);
-                        return true;
-                    case WebCompressionTypes.None:
-                    default:
-                        return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                if (File.Exists(outputPath))
-                    File.Delete(outputPath);
-
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]( ERR! ) Failed to decompress: {inputPath}![/] {ex.Message} Try different compression type."
-                );
-                Console.WriteLine();
-
-                return false;
             }
         }
     }
