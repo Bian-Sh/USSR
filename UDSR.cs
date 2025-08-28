@@ -1,7 +1,7 @@
 ﻿using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 
-namespace Realis
+namespace zFramework
 {
     public class UDSR
     {
